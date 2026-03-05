@@ -1,7 +1,7 @@
 {
   "name": "memo2terminal",
   "displayName": "Memo2Terminal",
-  "description": "Explorer 하단 사이드바 메모장을 터미널로 전송하는 Memo2Terminal 미니멀 MVP",
+  "description": "Explorer와 Source Control에서 공유 메모를 터미널로 전송하는 Memo2Terminal 미니멀 MVP",
   "version": "0.0.1",
   "publisher": "local",
   "engines": {
@@ -16,6 +16,13 @@
       "explorer": [
         {
           "id": "memo2terminal.view",
+          "name": "Memo2Terminal",
+          "type": "webview"
+        }
+      ],
+      "scm": [
+        {
+          "id": "memo2terminal.scmView",
           "name": "Memo2Terminal",
           "type": "webview"
         }

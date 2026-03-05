@@ -2,85 +2,152 @@
 	const vscode = acquireVsCodeApi();
 	const memo = document.getElementById('memo');
 	const sendButton = document.getElementById('sendButton');
-	const HISTORY_KEY = 'memo2terminal.history.v1';
-	const HISTORY_LIMIT = 15;
+	const viewId = document.body.dataset.viewId;
+	const LEGACY_HISTORY_KEY = 'memo2terminal.history.v1';
 
-	if (!(memo instanceof HTMLTextAreaElement) || !(sendButton instanceof HTMLButtonElement)) {
+	if (!(memo instanceof HTMLTextAreaElement) || !(sendButton instanceof HTMLButtonElement) || typeof viewId !== 'string' || viewId.length === 0) {
 		return;
 	}
 
-	let history = loadHistory();
+	let currentRevision = -1;
+	let history = [];
+	let isApplyingState = false;
+	let isComposing = false;
 	let isNavigatingHistory = false;
-	let historyCursor = history.length;
+	let historyCursor = 0;
 	let draftValue = '';
 
-	function sendToExtension() {
-		vscode.postMessage({
-			type: 'send',
-			text: memo.value
-		});
-	}
-
 	sendButton.addEventListener('click', sendToExtension);
-	memo.addEventListener('keydown', function (event) {
-		if (event.key === 'ArrowUp' && event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-			event.preventDefault();
-			moveHistory(-1);
-			return;
-		}
-
-		if (event.key === 'ArrowDown' && event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-			event.preventDefault();
-			moveHistory(1);
-			return;
-		}
-
-		if (event.code === 'KeyH' && event.metaKey && event.ctrlKey && !event.shiftKey && !event.altKey) {
-			event.preventDefault();
-			vscode.postMessage({
-				type: 'openHistory',
-				history: history
-			});
-			return;
-		}
-
-		if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-			event.preventDefault();
-			sendToExtension();
-		}
+	memo.addEventListener('focus', notifyFocusChanged);
+	memo.addEventListener('compositionstart', function () {
+		isComposing = true;
 	});
-
+	memo.addEventListener('compositionend', function () {
+		isComposing = false;
+		isNavigatingHistory = false;
+		historyCursor = history.length;
+		draftValue = memo.value;
+		postInputChanged();
+		notifySelectionChanged();
+	});
 	memo.addEventListener('input', function () {
-		if (!isNavigatingHistory) {
+		if (isApplyingState) {
 			return;
 		}
 
 		isNavigatingHistory = false;
 		historyCursor = history.length;
 		draftValue = memo.value;
+		if (isComposing) {
+			return;
+		}
+
+		postInputChanged();
+	});
+
+	memo.addEventListener('select', notifySelectionChanged);
+	memo.addEventListener('click', notifySelectionChanged);
+	memo.addEventListener('keydown', function (event) {
+		if (event.isComposing) {
+			return;
+		}
+
+		if (event.key === 'ArrowUp' && event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+			event.preventDefault();
+			event.stopPropagation();
+			moveHistory(-1);
+			return;
+		}
+
+		if (event.key === 'ArrowDown' && event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+			event.preventDefault();
+			event.stopPropagation();
+			moveHistory(1);
+			return;
+		}
+
+		if (event.code === 'KeyH' && event.metaKey && event.ctrlKey && !event.shiftKey && !event.altKey) {
+			event.preventDefault();
+			event.stopPropagation();
+			vscode.postMessage({
+				type: 'openHistory',
+				viewId: viewId
+			});
+			return;
+		}
+
+		if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+			event.preventDefault();
+			event.stopPropagation();
+			sendToExtension();
+			return;
+		}
+	});
+
+	memo.addEventListener('keyup', function (event) {
+		if (event.isComposing || isComposing) {
+			return;
+		}
+
+		notifySelectionChanged();
 	});
 
 	window.addEventListener('message', function (event) {
 		const message = event.data;
-		if (!message) {
+		if (!isStateMessage(message)) {
 			return;
 		}
 
-		if (message.type === 'sent' && message.ok === true && typeof message.text === 'string') {
-			pushHistory(message.text);
-			memo.value = '';
-			memo.focus();
-			return;
-		}
-
-		if (message.type === 'historySelected' && typeof message.text === 'string') {
-			memo.value = message.text;
-			moveCaretToEnd();
-			isNavigatingHistory = false;
-			historyCursor = history.length;
-			draftValue = memo.value;
-		}
+		applyState(message.state, message.focus === true, message.sourceViewId);
 	});
+
+	vscode.postMessage({
+		type: 'ready',
+		viewId: viewId,
+		legacyHistory: loadLegacyHistory()
+	});
+
+	function sendToExtension() {
+		vscode.postMessage({
+			type: 'send',
+			viewId: viewId,
+			text: memo.value
+		});
+	}
+
+	function postInputChanged() {
+		vscode.postMessage({
+			type: 'inputChanged',
+			viewId: viewId,
+			text: memo.value,
+			selectionStart: getSelectionStart(),
+			selectionEnd: getSelectionEnd()
+		});
+	}
+
+	function notifySelectionChanged() {
+		if (isApplyingState || isComposing) {
+			return;
+		}
+
+		vscode.postMessage({
+			type: 'selectionChanged',
+			viewId: viewId,
+			selectionStart: getSelectionStart(),
+			selectionEnd: getSelectionEnd()
+		});
+	}
+
+	function notifyFocusChanged() {
+		if (isApplyingState) {
+			return;
+		}
+
+		vscode.postMessage({
+			type: 'focusChanged',
+			viewId: viewId
+		});
+	}
 
 	function moveHistory(direction) {
 		if (history.length === 0) {
@@ -105,41 +172,59 @@
 			isNavigatingHistory = false;
 			memo.value = draftValue;
 			moveCaretToEnd();
+			postInputChanged();
 			return;
 		}
 
 		memo.value = history[historyCursor];
 		moveCaretToEnd();
+		postInputChanged();
 	}
 
-	function pushHistory(text) {
-		if (typeof text !== 'string') {
+	function applyState(state, shouldFocus, sourceViewId) {
+		if (state.revision < currentRevision) {
 			return;
 		}
 
-		const normalized = text.trim();
-		if (normalized.length === 0) {
+		if (sourceViewId === viewId && shouldFocus !== true) {
+			currentRevision = state.revision;
+			history = state.history.slice();
 			return;
 		}
 
-		if (history.length > 0 && history[history.length - 1] === text) {
-			resetNavigation();
-			return;
+		currentRevision = state.revision;
+		history = state.history.slice();
+
+		const preserveHistoryNavigation = isNavigatingHistory === true && sourceViewId === viewId;
+		if (!preserveHistoryNavigation) {
+			isNavigatingHistory = false;
+			historyCursor = history.length;
+			draftValue = state.draft;
 		}
 
-		history.push(text);
-		if (history.length > HISTORY_LIMIT) {
-			history = history.slice(history.length - HISTORY_LIMIT);
-		}
+		const selection = clampSelection(state.draft, state.selectionStart, state.selectionEnd);
 
-		saveHistory(history);
-		resetNavigation();
+		isApplyingState = true;
+		try {
+			if (memo.value !== state.draft) {
+				memo.value = state.draft;
+			}
+
+			memo.setSelectionRange(selection.start, selection.end);
+			if (shouldFocus) {
+				memo.focus();
+			}
+		} finally {
+			isApplyingState = false;
+		}
 	}
 
-	function resetNavigation() {
-		isNavigatingHistory = false;
-		historyCursor = history.length;
-		draftValue = '';
+	function getSelectionStart() {
+		return typeof memo.selectionStart === 'number' ? memo.selectionStart : 0;
+	}
+
+	function getSelectionEnd() {
+		return typeof memo.selectionEnd === 'number' ? memo.selectionEnd : getSelectionStart();
 	}
 
 	function moveCaretToEnd() {
@@ -148,9 +233,48 @@
 		memo.focus();
 	}
 
-	function loadHistory() {
+	function clampSelection(text, selectionStart, selectionEnd) {
+		const maxIndex = text.length;
+		const start = clampNumber(selectionStart, 0, maxIndex);
+		const end = clampNumber(selectionEnd, start, maxIndex);
+		return { start: start, end: end };
+	}
+
+	function clampNumber(value, min, max) {
+		if (!Number.isFinite(value)) {
+			return min;
+		}
+
+		return Math.min(Math.max(Math.trunc(value), min), max);
+	}
+
+	function isStateMessage(message) {
+		return Boolean(
+			message &&
+			(message.type === 'hydrate' || message.type === 'stateChanged') &&
+			isStatePayload(message.state) &&
+			typeof message.focus === 'boolean' &&
+			(message.sourceViewId === undefined || typeof message.sourceViewId === 'string')
+		);
+	}
+
+	function isStatePayload(state) {
+		return Boolean(
+			state &&
+			typeof state.draft === 'string' &&
+			typeof state.selectionStart === 'number' &&
+			typeof state.selectionEnd === 'number' &&
+			typeof state.revision === 'number' &&
+			Array.isArray(state.history) &&
+			state.history.every(function (item) {
+				return typeof item === 'string';
+			})
+		);
+	}
+
+	function loadLegacyHistory() {
 		try {
-			const raw = localStorage.getItem(HISTORY_KEY);
+			const raw = localStorage.getItem(LEGACY_HISTORY_KEY);
 			if (!raw) {
 				return [];
 			}
@@ -162,17 +286,9 @@
 
 			return parsed.filter(function (item) {
 				return typeof item === 'string';
-			}).slice(-HISTORY_LIMIT);
+			});
 		} catch (_error) {
 			return [];
-		}
-	}
-
-	function saveHistory(nextHistory) {
-		try {
-			localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory.slice(-HISTORY_LIMIT)));
-		} catch (_error) {
-			// ignore storage quota/runtime errors
 		}
 	}
 })();
