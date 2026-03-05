@@ -1,0 +1,40 @@
+{
+  "name": "memo2terminal",
+  "displayName": "Memo2Terminal",
+  "description": "Explorer 하단 사이드바 메모장을 터미널로 전송하는 Memo2Terminal 미니멀 MVP",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "memo2terminal.view",
+          "name": "Memo2Terminal",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "memo2terminal.focusView",
+        "title": "Memo2Terminal: 메모장 뷰 포커스"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.57",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.6.3"
+  }
+}

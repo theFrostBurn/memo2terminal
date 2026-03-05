@@ -1,0 +1,50 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	padding: 8px;
+	font-family: var(--vscode-font-family);
+}
+
+.container {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+#memo {
+	width: 100%;
+	min-height: 180px;
+	resize: vertical;
+	padding: 8px;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--vscode-input-foreground);
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+}
+
+.actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+#sendButton {
+	padding: 6px 10px;
+	border: 1px solid var(--vscode-button-border, transparent);
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.hint {
+	margin: 0;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
