@@ -2,6 +2,11 @@
   "name": "memo2terminal",
   "displayName": "Memo2Terminal",
   "description": "Explorer와 Source Control에서 공유 메모를 터미널로 전송하는 Memo2Terminal 미니멀 MVP",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/theFrostBurn/memo2terminal.git"
+  },
   "version": "0.0.1",
   "publisher": "local",
   "engines": {
@@ -37,7 +42,8 @@
   },
   "scripts": {
     "compile": "tsc -p ./",
-    "watch": "tsc -w -p ./"
+    "watch": "tsc -w -p ./",
+    "vscode:prepublish": "npm run compile"
   },
   "devDependencies": {
     "@types/node": "^20.17.57",

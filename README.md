@@ -23,6 +23,20 @@ npm run compile
 
 그 다음 `F5`로 Extension Development Host를 실행하세요.
 
+## VSIX 패키징 및 설치
+
+실사용으로 설치하려면 `VSIX` 패키지로 묶어서 현재 IDE에 설치하면 됩니다.
+
+```bash
+npx @vscode/vsce package
+```
+
+- `package.json`의 `vscode:prepublish` 설정으로 패키징 전에 `npm run compile`이 자동 실행됩니다.
+- 패키징이 끝나면 프로젝트 루트에 `.vsix` 파일이 생성됩니다.
+- VS Code 또는 Cursor에서 확장 메뉴의 `...`에서 `Install from VSIX...`를 선택해 설치하면 됩니다.
+- Cursor에서 해당 메뉴가 보이지 않으면 명령 팔레트에서 `Extensions: Install from VSIX...`를 직접 실행해 설치하면 됩니다.
+- 수정이 생기면 소스를 고친 뒤 다시 패키징해서 새 `.vsix`를 재설치하면 됩니다.
+
 ## 사용 팁
 
 - Explorer나 Source Control 어느 쪽에서 입력해도 같은 메모가 즉시 반영됩니다.
