@@ -41,7 +41,8 @@
     ]
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "clean": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\"",
+    "compile": "npm run clean && tsc -p ./",
     "watch": "tsc -w -p ./",
     "vscode:prepublish": "npm run compile"
   },
