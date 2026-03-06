@@ -151,7 +151,7 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'view.js'));
 		const nonce = getNonce();
 
-		return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
 <html lang="ko">
 <head>
 	<meta charset="UTF-8" />
@@ -162,10 +162,14 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body data-view-id="${this.viewId}">
 	<div class="container">
-		<textarea id="memo" placeholder="메모 입력 후 Ctrl+Enter 또는 전송 버튼"></textarea>
-		<div class="actions">
-			<p class="hint">Cmd+↑/↓: 히스토리 순회 · Cmd+Ctrl+H: 히스토리 목록</p>
-			<button id="sendButton" type="button">터미널로 전송</button>
+		<div class="panel">
+			<textarea id="memo" placeholder="메모 입력 후 Ctrl+Enter 또는 전송 버튼"></textarea>
+			<div class="actions">
+				<p class="hint">Cmd+↑/↓: 히스토리 순환<br />Cmd+Ctrl+H: 히스토리 목록</p>
+				<button id="sendButton" type="button" aria-label="터미널로 전송">
+					<span class="sendIcon" aria-hidden="true"></span>
+				</button>
+			</div>
 		</div>
 	</div>
 	<script nonce="${nonce}" src="${scriptUri}"></script>

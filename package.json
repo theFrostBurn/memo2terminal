@@ -16,14 +16,14 @@
       "explorer": [
         {
           "id": "memo2terminal.view",
-          "name": "Memo2Terminal",
+          "name": "Memo to Terminal",
           "type": "webview"
         }
       ],
       "scm": [
         {
           "id": "memo2terminal.scmView",
-          "name": "Memo2Terminal",
+          "name": "Memo to Terminal",
           "type": "webview"
         }
       ]
