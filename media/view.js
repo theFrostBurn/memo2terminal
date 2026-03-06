@@ -14,8 +14,10 @@
 	let isApplyingState = false;
 	let isComposing = false;
 	let isNavigatingHistory = false;
+	let isPickingFileTag = false;
 	let historyCursor = 0;
 	let draftValue = '';
+	let pendingFileTagRange = null;
 
 	sendButton.addEventListener('click', sendToExtension);
 	memo.addEventListener('focus', notifyFocusChanged);
@@ -30,7 +32,7 @@
 		postInputChanged();
 		notifySelectionChanged();
 	});
-	memo.addEventListener('input', function () {
+	memo.addEventListener('input', function (event) {
 		if (isApplyingState) {
 			return;
 		}
@@ -43,6 +45,7 @@
 		}
 
 		postInputChanged();
+		maybeRequestFileTag(event);
 	});
 
 	memo.addEventListener('select', notifySelectionChanged);
@@ -94,6 +97,11 @@
 
 	window.addEventListener('message', function (event) {
 		const message = event.data;
+		if (isFileTagMessage(message)) {
+			applyFileTag(message.text);
+			return;
+		}
+
 		if (!isStateMessage(message)) {
 			return;
 		}
@@ -147,6 +155,57 @@
 			type: 'focusChanged',
 			viewId: viewId
 		});
+	}
+
+	function maybeRequestFileTag(event) {
+		if (!(event instanceof InputEvent) || event.inputType !== 'insertText' || event.data !== '@' || isPickingFileTag) {
+			return;
+		}
+
+		const selectionStart = getSelectionStart();
+		const selectionEnd = getSelectionEnd();
+		if (selectionStart !== selectionEnd || selectionStart <= 0) {
+			return;
+		}
+
+		const triggerStart = selectionStart - 1;
+		const previousChar = triggerStart > 0 ? memo.value.charAt(triggerStart - 1) : '';
+		if (!isFileTagBoundary(previousChar)) {
+			return;
+		}
+
+		isPickingFileTag = true;
+		pendingFileTagRange = {
+			start: triggerStart,
+			end: selectionStart
+		};
+
+		vscode.postMessage({
+			type: 'pickFileTag',
+			viewId: viewId
+		});
+	}
+
+	function applyFileTag(text) {
+		isPickingFileTag = false;
+		const range = pendingFileTagRange;
+		pendingFileTagRange = null;
+		if (typeof text !== 'string' || !range) {
+			return;
+		}
+
+		const nextText = memo.value.slice(0, range.start) + text + ' ' + memo.value.slice(range.end);
+		const caret = range.start + text.length + 1;
+
+		memo.value = nextText;
+		memo.focus();
+		memo.setSelectionRange(caret, caret);
+
+		isNavigatingHistory = false;
+		historyCursor = history.length;
+		draftValue = memo.value;
+		postInputChanged();
+		notifySelectionChanged();
 	}
 
 	function moveHistory(direction) {
@@ -246,6 +305,14 @@
 		}
 
 		return Math.min(Math.max(Math.trunc(value), min), max);
+	}
+
+	function isFileTagBoundary(value) {
+		return value === '' || /[\s([{'"`:,]/.test(value);
+	}
+
+	function isFileTagMessage(message) {
+		return Boolean(message && message.type === 'fileTagPicked' && (message.text === null || typeof message.text === 'string'));
 	}
 
 	function isStateMessage(message) {

@@ -16,6 +16,10 @@ interface HistoryPickItem extends vscode.QuickPickItem {
 	value: string;
 }
 
+interface FileTagPickItem extends vscode.QuickPickItem {
+	value: string;
+}
+
 class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 	constructor(
 		private readonly viewId: MemoViewId,
@@ -117,6 +121,14 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 				this.registry.broadcastState(this.store.snapshot(), this.viewId, this.viewId);
 				return;
 			}
+			case 'pickFileTag': {
+				const selected = await this.pickFileTag();
+				await webviewView.webview.postMessage({
+					type: 'fileTagPicked',
+					text: selected ?? null,
+				});
+				return;
+			}
 			default:
 				return;
 		}
@@ -141,6 +153,43 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 		const selected = await vscode.window.showQuickPick(picks, {
 			placeHolder: '최근 전송 히스토리(최대 15개)',
 			matchOnDescription: true,
+		});
+
+		return selected?.value;
+	}
+
+	private async pickFileTag(): Promise<string | undefined> {
+		if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+			void vscode.window.showInformationMessage('열려 있는 워크스페이스 파일이 없습니다.');
+			return undefined;
+		}
+
+		const fileUris = await vscode.workspace.findFiles('**/*', undefined, 2000);
+		if (fileUris.length === 0) {
+			void vscode.window.showInformationMessage('태깅할 수 있는 파일을 찾지 못했습니다.');
+			return undefined;
+		}
+
+		const picks: FileTagPickItem[] = fileUris
+			.map((uri) => {
+				const relativePath = vscode.workspace.asRelativePath(uri, true).replace(/\\/g, '/');
+				const pathSegments = relativePath.split('/');
+				const label = pathSegments[pathSegments.length - 1] ?? relativePath;
+				const parentPath = pathSegments.slice(0, -1).join('/');
+
+				return {
+					label,
+					description: parentPath.length > 0 ? parentPath : '(워크스페이스 루트)',
+					detail: relativePath,
+					value: `@${relativePath}`,
+				};
+			})
+			.sort((left, right) => left.value.localeCompare(right.value, 'ko'));
+
+		const selected = await vscode.window.showQuickPick(picks, {
+			placeHolder: '@로 삽입할 파일을 선택하세요',
+			matchOnDescription: true,
+			matchOnDetail: true,
 		});
 
 		return selected?.value;
