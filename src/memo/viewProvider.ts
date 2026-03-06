@@ -1,16 +1,15 @@
 import * as vscode from 'vscode';
 
 import {
+	MemoState,
+	MemoStateMessage,
 	TERMINAL_NAME,
 	getNonce,
 	isRecord,
 	normalizeHistory,
-	toQuickPickDescription,
-	toQuickPickLabel,
 	type MemoViewId,
 } from './core';
 import { MemoStore } from './store';
-import { MemoViewRegistry } from './viewRegistry';
 
 interface HistoryPickItem extends vscode.QuickPickItem {
 	value: string;
@@ -18,6 +17,73 @@ interface HistoryPickItem extends vscode.QuickPickItem {
 
 interface FileTagPickItem extends vscode.QuickPickItem {
 	value: string;
+	sortRank: number;
+}
+
+const FILE_TAG_EXCLUDED_DIRECTORIES = [
+	'.git',
+	'.venv',
+	'venv',
+	'.direnv',
+	'node_modules',
+	'.next',
+	'.nuxt',
+	'.svelte-kit',
+	'.turbo',
+	'.cache',
+	'.mypy_cache',
+	'.pytest_cache',
+	'.ruff_cache',
+	'.tox',
+	'__pycache__',
+	'dist',
+	'build',
+	'out',
+	'coverage',
+	'target',
+	'vendor',
+] as const;
+
+const FILE_TAG_EXCLUDE_GLOB = `**/{${FILE_TAG_EXCLUDED_DIRECTORIES.join(',')}}/**`;
+
+class MemoViewRegistry {
+	private readonly views = new Map<MemoViewId, vscode.WebviewView>();
+
+	register(viewId: MemoViewId, view: vscode.WebviewView): void {
+		this.views.set(viewId, view);
+	}
+
+	unregister(viewId: MemoViewId, view: vscode.WebviewView): void {
+		if (this.views.get(viewId) !== view) {
+			return;
+		}
+
+		this.views.delete(viewId);
+	}
+
+	broadcastState(state: MemoState, sourceViewId?: MemoViewId, focusViewId?: MemoViewId): void {
+		for (const [viewId, view] of this.views) {
+			this.postStateToView(viewId, view, 'stateChanged', state, sourceViewId, focusViewId);
+		}
+	}
+
+	postStateToView(
+		viewId: MemoViewId,
+		view: vscode.WebviewView,
+		type: MemoStateMessage['type'],
+		state: MemoState,
+		sourceViewId?: MemoViewId,
+		focusViewId?: MemoViewId,
+	): void {
+		const message: MemoStateMessage = {
+			type,
+			state,
+			focus: viewId === focusViewId,
+			sourceViewId,
+		};
+
+		void view.webview.postMessage(message);
+	}
 }
 
 class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
@@ -145,8 +211,8 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 			.slice()
 			.reverse()
 			.map((text) => ({
-				label: toQuickPickLabel(text),
-				description: toQuickPickDescription(text),
+				label: formatHistoryLabel(text),
+				description: formatHistoryDescription(text),
 				value: text,
 			}));
 
@@ -164,7 +230,11 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 			return undefined;
 		}
 
-		const fileUris = await vscode.workspace.findFiles('**/*', undefined, 2000);
+		const activeFile = vscode.window.activeTextEditor?.document.uri;
+		const activeRelativePath =
+			activeFile && activeFile.scheme === 'file' ? vscode.workspace.asRelativePath(activeFile, true).replace(/\\/g, '/') : undefined;
+
+		const fileUris = await vscode.workspace.findFiles('**/*', FILE_TAG_EXCLUDE_GLOB);
 		if (fileUris.length === 0) {
 			void vscode.window.showInformationMessage('태깅할 수 있는 파일을 찾지 못했습니다.');
 			return undefined;
@@ -176,18 +246,26 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 				const pathSegments = relativePath.split('/');
 				const label = pathSegments[pathSegments.length - 1] ?? relativePath;
 				const parentPath = pathSegments.slice(0, -1).join('/');
+				const sortRank = relativePath === activeRelativePath ? 0 : 1;
 
 				return {
 					label,
 					description: parentPath.length > 0 ? parentPath : '(워크스페이스 루트)',
 					detail: relativePath,
 					value: `@${relativePath}`,
+					sortRank,
 				};
 			})
-			.sort((left, right) => left.value.localeCompare(right.value, 'ko'));
+			.sort((left, right) => {
+				if (left.sortRank !== right.sortRank) {
+					return left.sortRank - right.sortRank;
+				}
+
+				return left.value.localeCompare(right.value, 'ko');
+			});
 
 		const selected = await vscode.window.showQuickPick(picks, {
-			placeHolder: '@로 삽입할 파일을 선택하세요',
+			placeHolder: '@로 삽입할 파일을 선택하세요. 현재 파일이 가장 위에 표시됩니다.',
 			matchOnDescription: true,
 			matchOnDetail: true,
 		});
@@ -233,4 +311,19 @@ function sendTextToTerminal(text: string): void {
 	terminal.sendText(text, true);
 }
 
-export { Memo2TerminalViewProvider };
+function formatHistoryLabel(text: string): string {
+	const firstLine = text.split(/\r?\n/)[0] ?? '';
+	const compact = firstLine.trim();
+	if (compact.length === 0) {
+		return '(빈 줄)';
+	}
+
+	return compact.length <= 60 ? compact : `${compact.slice(0, 57)}...`;
+}
+
+function formatHistoryDescription(text: string): string {
+	const normalized = text.replace(/\s+/g, ' ').trim();
+	return normalized.length <= 90 ? normalized : `${normalized.slice(0, 87)}...`;
+}
+
+export { Memo2TerminalViewProvider, MemoViewRegistry };

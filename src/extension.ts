@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 
 import { MEMO_VIEW_IDS } from './memo/core';
 import { MemoStore } from './memo/store';
-import { Memo2TerminalViewProvider } from './memo/viewProvider';
-import { MemoViewRegistry } from './memo/viewRegistry';
+import { Memo2TerminalViewProvider, MemoViewRegistry } from './memo/viewProvider';
 
 let activeStore: MemoStore | undefined;
 

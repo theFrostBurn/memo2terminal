@@ -26,9 +26,7 @@
 	});
 	memo.addEventListener('compositionend', function () {
 		isComposing = false;
-		isNavigatingHistory = false;
-		historyCursor = history.length;
-		draftValue = memo.value;
+		rememberCurrentDraft();
 		postInputChanged();
 		notifySelectionChanged();
 	});
@@ -37,9 +35,7 @@
 			return;
 		}
 
-		isNavigatingHistory = false;
-		historyCursor = history.length;
-		draftValue = memo.value;
+		rememberCurrentDraft();
 		if (isComposing) {
 			return;
 		}
@@ -187,10 +183,15 @@
 	}
 
 	function applyFileTag(text) {
-		isPickingFileTag = false;
 		const range = pendingFileTagRange;
-		pendingFileTagRange = null;
-		if (typeof text !== 'string' || !range) {
+		clearPendingFileTag();
+		if (!range) {
+			return;
+		}
+
+		if (typeof text !== 'string') {
+			memo.focus();
+			memo.setSelectionRange(range.end, range.end);
 			return;
 		}
 
@@ -201,9 +202,7 @@
 		memo.focus();
 		memo.setSelectionRange(caret, caret);
 
-		isNavigatingHistory = false;
-		historyCursor = history.length;
-		draftValue = memo.value;
+		rememberCurrentDraft();
 		postInputChanged();
 		notifySelectionChanged();
 	}
@@ -213,11 +212,7 @@
 			return;
 		}
 
-		if (!isNavigatingHistory) {
-			isNavigatingHistory = true;
-			historyCursor = history.length;
-			draftValue = memo.value;
-		}
+		beginHistoryNavigation();
 
 		if (direction < 0) {
 			if (historyCursor > 0) {
@@ -228,7 +223,7 @@
 		}
 
 		if (historyCursor >= history.length) {
-			isNavigatingHistory = false;
+			stopHistoryNavigation();
 			memo.value = draftValue;
 			moveCaretToEnd();
 			postInputChanged();
@@ -256,8 +251,7 @@
 
 		const preserveHistoryNavigation = isNavigatingHistory === true && sourceViewId === viewId;
 		if (!preserveHistoryNavigation) {
-			isNavigatingHistory = false;
-			historyCursor = history.length;
+			stopHistoryNavigation();
 			draftValue = state.draft;
 		}
 
@@ -265,14 +259,7 @@
 
 		isApplyingState = true;
 		try {
-			if (memo.value !== state.draft) {
-				memo.value = state.draft;
-			}
-
-			memo.setSelectionRange(selection.start, selection.end);
-			if (shouldFocus) {
-				memo.focus();
-			}
+			applyMemoValue(state.draft, selection.start, selection.end, shouldFocus);
 		} finally {
 			isApplyingState = false;
 		}
@@ -290,6 +277,42 @@
 		const end = memo.value.length;
 		memo.setSelectionRange(end, end);
 		memo.focus();
+	}
+
+	function applyMemoValue(text, selectionStart, selectionEnd, shouldFocus) {
+		if (memo.value !== text) {
+			memo.value = text;
+		}
+
+		memo.setSelectionRange(selectionStart, selectionEnd);
+		if (shouldFocus) {
+			memo.focus();
+		}
+	}
+
+	function beginHistoryNavigation() {
+		if (isNavigatingHistory) {
+			return;
+		}
+
+		isNavigatingHistory = true;
+		historyCursor = history.length;
+		draftValue = memo.value;
+	}
+
+	function stopHistoryNavigation() {
+		isNavigatingHistory = false;
+		historyCursor = history.length;
+	}
+
+	function rememberCurrentDraft() {
+		stopHistoryNavigation();
+		draftValue = memo.value;
+	}
+
+	function clearPendingFileTag() {
+		isPickingFileTag = false;
+		pendingFileTagRange = null;
 	}
 
 	function clampSelection(text, selectionStart, selectionEnd) {

@@ -108,29 +108,6 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
 	return left.every((value, index) => value === right[index]);
 }
 
-function toQuickPickLabel(text: string): string {
-	const firstLine = text.split(/\r?\n/)[0] ?? '';
-	const compact = firstLine.trim();
-	if (compact.length === 0) {
-		return '(빈 줄)';
-	}
-
-	if (compact.length <= 60) {
-		return compact;
-	}
-
-	return `${compact.slice(0, 57)}...`;
-}
-
-function toQuickPickDescription(text: string): string {
-	const normalized = text.replace(/\s+/g, ' ').trim();
-	if (normalized.length <= 90) {
-		return normalized;
-	}
-
-	return `${normalized.slice(0, 87)}...`;
-}
-
 function getNonce(): string {
 	const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 	let nonce = '';
@@ -158,8 +135,6 @@ export {
 	mergeHistory,
 	normalizeHistory,
 	pushHistory,
-	toQuickPickDescription,
-	toQuickPickLabel,
 };
 
 export type { MemoState, MemoStateMessage, MemoViewId, PersistedMemoState };
