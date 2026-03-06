@@ -21,12 +21,31 @@ interface FileTagPickItem extends vscode.QuickPickItem {
 }
 
 type ShortcutPlatform = 'macos' | 'default';
+type ShortcutActionId = 'send' | 'historyPrevious' | 'historyNext' | 'historyList';
+
+interface ShortcutBinding {
+	alt: boolean;
+	code?: string;
+	ctrl: boolean;
+	display: string;
+	key?: string;
+	meta: boolean;
+	shift: boolean;
+}
 
 interface ShortcutConfig {
+	historyList: ShortcutBinding;
+	historyNext: ShortcutBinding;
+	historyPrevious: ShortcutBinding;
 	historyCycleHint: string;
 	historyListHint: string;
-	platform: ShortcutPlatform;
+	send: ShortcutBinding;
 	sendPlaceholder: string;
+}
+
+interface ShortcutConfigMessage {
+	type: 'shortcutConfigChanged';
+	shortcutConfig: ShortcutConfig;
 }
 
 const FILE_TAG_EXCLUDED_DIRECTORIES = [
@@ -54,9 +73,29 @@ const FILE_TAG_EXCLUDED_DIRECTORIES = [
 ] as const;
 
 const FILE_TAG_EXCLUDE_GLOB = `**/{${FILE_TAG_EXCLUDED_DIRECTORIES.join(',')}}/**`;
+const SHORTCUT_CONFIGURATION_SECTION = 'memo2terminal.shortcuts';
+const DEFAULT_SHORTCUT_SPECS: Record<ShortcutPlatform, Record<ShortcutActionId, string>> = {
+	macos: {
+		send: 'Cmd+Enter',
+		historyPrevious: 'Cmd+ArrowUp',
+		historyNext: 'Cmd+ArrowDown',
+		historyList: 'Cmd+Ctrl+H',
+	},
+	default: {
+		send: 'Ctrl+Enter',
+		historyPrevious: 'Ctrl+ArrowUp',
+		historyNext: 'Ctrl+ArrowDown',
+		historyList: 'Ctrl+H',
+	},
+};
 
 class MemoViewRegistry {
 	private readonly views = new Map<MemoViewId, vscode.WebviewView>();
+	private shortcutConfig: ShortcutConfig;
+
+	constructor(shortcutConfig: ShortcutConfig) {
+		this.shortcutConfig = shortcutConfig;
+	}
 
 	register(viewId: MemoViewId, view: vscode.WebviewView): void {
 		this.views.set(viewId, view);
@@ -70,9 +109,23 @@ class MemoViewRegistry {
 		this.views.delete(viewId);
 	}
 
+	getShortcutConfig(): ShortcutConfig {
+		return this.shortcutConfig;
+	}
+
+	updateShortcutConfig(shortcutConfig: ShortcutConfig): void {
+		this.shortcutConfig = shortcutConfig;
+	}
+
 	broadcastState(state: MemoState, sourceViewId?: MemoViewId, focusViewId?: MemoViewId): void {
 		for (const [viewId, view] of this.views) {
 			this.postStateToView(viewId, view, 'stateChanged', state, sourceViewId, focusViewId);
+		}
+	}
+
+	broadcastShortcutConfig(): void {
+		for (const view of this.views.values()) {
+			this.postShortcutConfigToView(view);
 		}
 	}
 
@@ -89,6 +142,15 @@ class MemoViewRegistry {
 			state,
 			focus: viewId === focusViewId,
 			sourceViewId,
+		};
+
+		void view.webview.postMessage(message);
+	}
+
+	postShortcutConfigToView(view: vscode.WebviewView): void {
+		const message: ShortcutConfigMessage = {
+			type: 'shortcutConfigChanged',
+			shortcutConfig: this.shortcutConfig,
 		};
 
 		void view.webview.postMessage(message);
@@ -123,6 +185,7 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 			}
 
 			this.registry.postStateToView(this.viewId, webviewView, 'stateChanged', this.store.snapshot());
+			this.registry.postShortcutConfigToView(webviewView);
 		});
 
 		const disposeDisposable = webviewView.onDidDispose(() => {
@@ -146,6 +209,7 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 				}
 
 				this.registry.postStateToView(this.viewId, webviewView, 'hydrate', this.store.snapshot());
+				this.registry.postShortcutConfigToView(webviewView);
 				return;
 			}
 			case 'focusChanged':
@@ -189,6 +253,7 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 			case 'openHistory': {
 				const selected = await this.pickHistory();
 				if (selected === undefined) {
+					this.registry.postStateToView(this.viewId, webviewView, 'stateChanged', this.store.snapshot(), undefined, this.viewId);
 					return;
 				}
 
@@ -212,7 +277,7 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 	private async pickHistory(): Promise<string | undefined> {
 		const history = this.store.snapshot().history;
 		if (history.length === 0) {
-			void vscode.window.showInformationMessage('저장된 히스토리가 없습니다.');
+			await vscode.window.showInformationMessage('저장된 히스토리가 없습니다.');
 			return undefined;
 		}
 
@@ -286,7 +351,8 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'view.css'));
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'view.js'));
 		const nonce = getNonce();
-		const shortcutConfig = getShortcutConfig();
+		const shortcutConfig = this.registry.getShortcutConfig();
+		const serializedShortcutConfig = serializeForInlineScript(shortcutConfig);
 
 	return `<!DOCTYPE html>
 <html lang="ko">
@@ -297,18 +363,19 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 	<link rel="stylesheet" href="${styleUri}" />
 	<title>Memo2Terminal</title>
 </head>
-<body data-platform="${shortcutConfig.platform}" data-view-id="${this.viewId}">
+<body data-view-id="${this.viewId}">
 	<div class="container">
 		<div class="panel">
 				<textarea id="memo" placeholder="${shortcutConfig.sendPlaceholder}"></textarea>
 			<div class="actions">
-				<p class="hint">${shortcutConfig.historyCycleHint}<br />${shortcutConfig.historyListHint}</p>
+				<p class="hint"><span id="historyCycleHint">${shortcutConfig.historyCycleHint}</span><br /><span id="historyListHint">${shortcutConfig.historyListHint}</span></p>
 				<button id="sendButton" type="button" aria-label="터미널로 전송">
 					<span class="sendIcon" aria-hidden="true"></span>
 				</button>
 			</div>
 		</div>
 	</div>
+	<script nonce="${nonce}">globalThis.__memo2terminalShortcutConfig = ${serializedShortcutConfig};</script>
 	<script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
@@ -336,22 +403,225 @@ function formatHistoryDescription(text: string): string {
 	return normalized.length <= 90 ? normalized : `${normalized.slice(0, 87)}...`;
 }
 
-function getShortcutConfig(): ShortcutConfig {
-	if (process.platform === 'darwin') {
-		return {
-			historyCycleHint: 'Cmd + ↑/↓ : 히스토리 순환',
-			historyListHint: 'Cmd + Ctrl + H : 히스토리 목록',
-			platform: 'macos',
-			sendPlaceholder: 'Cmd + Enter 로 터미널에 전송',
-		};
-	}
+function resolveShortcutConfig(): ShortcutConfig {
+	const platform = process.platform === 'darwin' ? 'macos' : 'default';
+	const configuration = vscode.workspace.getConfiguration(SHORTCUT_CONFIGURATION_SECTION);
+	const defaults = DEFAULT_SHORTCUT_SPECS[platform];
+	const send = resolveShortcutBinding(configuration.get<string>('send'), defaults.send, platform);
+	const historyPrevious = resolveShortcutBinding(configuration.get<string>('historyPrevious'), defaults.historyPrevious, platform);
+	const historyNext = resolveShortcutBinding(configuration.get<string>('historyNext'), defaults.historyNext, platform);
+	const historyList = resolveShortcutBinding(configuration.get<string>('historyList'), defaults.historyList, platform);
 
 	return {
-		historyCycleHint: 'Ctrl + ↑/↓ : 히스토리 순환',
-		historyListHint: 'Ctrl + H : 히스토리 목록',
-		platform: 'default',
-		sendPlaceholder: 'Ctrl + Enter 로 터미널에 전송',
+		historyList,
+		historyNext,
+		historyPrevious,
+		historyCycleHint: `${formatHistoryCycleDisplay(historyPrevious, historyNext, platform)} : 히스토리 순환`,
+		historyListHint: `${historyList.display} : 히스토리 목록`,
+		send,
+		sendPlaceholder: `${send.display} 로 터미널에 전송`,
 	};
 }
 
-export { Memo2TerminalViewProvider, MemoViewRegistry };
+function resolveShortcutBinding(
+	configuredValue: string | undefined,
+	fallbackValue: string,
+	platform: ShortcutPlatform,
+): ShortcutBinding {
+	const fallback = parseShortcutBinding(fallbackValue, platform);
+	if (!fallback) {
+		throw new Error(`기본 단축키를 해석할 수 없습니다: ${fallbackValue}`);
+	}
+
+	const parsed = parseShortcutBinding(configuredValue, platform);
+	return parsed ?? fallback;
+}
+
+function parseShortcutBinding(rawValue: string | undefined, platform: ShortcutPlatform): ShortcutBinding | undefined {
+	if (typeof rawValue !== 'string') {
+		return undefined;
+	}
+
+	const compactValue = rawValue.trim();
+	if (compactValue.length === 0) {
+		return undefined;
+	}
+
+	const tokens = compactValue
+		.split('+')
+		.map((token) => token.trim())
+		.filter((token) => token.length > 0);
+
+	if (tokens.length === 0) {
+		return undefined;
+	}
+
+	const keyToken = tokens[tokens.length - 1];
+	const key = parseShortcutKey(keyToken, platform);
+	if (!key) {
+		return undefined;
+	}
+
+	const modifiers = {
+		alt: false,
+		ctrl: false,
+		meta: false,
+		shift: false,
+	};
+
+	for (const token of tokens.slice(0, -1)) {
+		const normalizedToken = token.toLowerCase();
+		switch (normalizedToken) {
+			case 'cmd':
+			case 'command':
+			case 'meta':
+				if (modifiers.meta) {
+					return undefined;
+				}
+				modifiers.meta = true;
+				break;
+			case 'ctrl':
+			case 'control':
+				if (modifiers.ctrl) {
+					return undefined;
+				}
+				modifiers.ctrl = true;
+				break;
+			case 'alt':
+			case 'option':
+				if (modifiers.alt) {
+					return undefined;
+				}
+				modifiers.alt = true;
+				break;
+			case 'shift':
+				if (modifiers.shift) {
+					return undefined;
+				}
+				modifiers.shift = true;
+				break;
+			default:
+				return undefined;
+		}
+	}
+
+	return {
+		...modifiers,
+		code: key.code,
+		display: [...getModifierLabels(modifiers, platform), key.label].join(' + '),
+		key: key.key,
+	};
+}
+
+function parseShortcutKey(
+	token: string,
+	platform: ShortcutPlatform,
+): { code?: string; key?: string; label: string } | undefined {
+	const normalizedToken = token.toLowerCase();
+
+	switch (normalizedToken) {
+		case 'enter':
+			return { key: 'Enter', label: 'Enter' };
+		case 'up':
+		case 'arrowup':
+		case 'uparrow':
+		case '↑':
+			return { key: 'ArrowUp', label: '↑' };
+		case 'down':
+		case 'arrowdown':
+		case 'downarrow':
+		case '↓':
+			return { key: 'ArrowDown', label: '↓' };
+		case 'tab':
+			return { key: 'Tab', label: 'Tab' };
+		case 'esc':
+		case 'escape':
+			return { key: 'Escape', label: 'Esc' };
+		case 'backspace':
+			return { key: 'Backspace', label: platform === 'macos' ? 'Delete' : 'Backspace' };
+		case 'space':
+			return { code: 'Space', key: ' ', label: 'Space' };
+		default:
+			break;
+	}
+
+	if (/^[a-z]$/i.test(token)) {
+		const value = token.toUpperCase();
+		return { code: `Key${value}`, label: value };
+	}
+
+	if (/^key[a-z]$/i.test(token)) {
+		const value = token.slice(-1).toUpperCase();
+		return { code: `Key${value}`, label: value };
+	}
+
+	if (/^[0-9]$/.test(token)) {
+		return { code: `Digit${token}`, label: token };
+	}
+
+	if (/^digit[0-9]$/i.test(token)) {
+		const value = token.slice(-1);
+		return { code: `Digit${value}`, label: value };
+	}
+
+	return undefined;
+}
+
+function formatHistoryCycleDisplay(
+	historyPrevious: ShortcutBinding,
+	historyNext: ShortcutBinding,
+	platform: ShortcutPlatform,
+): string {
+	if (
+		historyPrevious.key === 'ArrowUp' &&
+		historyNext.key === 'ArrowDown' &&
+		historyPrevious.code === undefined &&
+		historyNext.code === undefined &&
+		hasSameShortcutModifiers(historyPrevious, historyNext)
+	) {
+		const modifiers = getModifierLabels(historyPrevious, platform);
+		return modifiers.length === 0 ? '↑/↓' : `${modifiers.join(' + ')} + ↑/↓`;
+	}
+
+	return `${historyPrevious.display} / ${historyNext.display}`;
+}
+
+function hasSameShortcutModifiers(left: ShortcutBinding, right: ShortcutBinding): boolean {
+	return left.alt === right.alt && left.ctrl === right.ctrl && left.meta === right.meta && left.shift === right.shift;
+}
+
+function getModifierLabels(
+	modifiers: Pick<ShortcutBinding, 'alt' | 'ctrl' | 'meta' | 'shift'>,
+	platform: ShortcutPlatform,
+): string[] {
+	const labels: string[] = [];
+
+	if (modifiers.meta) {
+		labels.push(platform === 'macos' ? 'Cmd' : 'Meta');
+	}
+
+	if (modifiers.ctrl) {
+		labels.push('Ctrl');
+	}
+
+	if (modifiers.alt) {
+		labels.push(platform === 'macos' ? 'Option' : 'Alt');
+	}
+
+	if (modifiers.shift) {
+		labels.push('Shift');
+	}
+
+	return labels;
+}
+
+function serializeForInlineScript(value: unknown): string {
+	return JSON.stringify(value)
+		.replace(/</g, '\\u003c')
+		.replace(/>/g, '\\u003e')
+		.replace(/&/g, '\\u0026')
+		.replace(/\u2028/g, '\\u2028')
+		.replace(/\u2029/g, '\\u2029');
+}
+
+export { Memo2TerminalViewProvider, MemoViewRegistry, resolveShortcutConfig };

@@ -54,3 +54,37 @@ npx @vscode/vsce package
 - `@file` 선택기에서는 `.venv`, `node_modules`, `dist` 같은 공통 생성 디렉터리는 기본적으로 숨깁니다.
 - 현재 에디터에서 열어둔 파일은 `@file` 선택기 상단에 우선 표시됩니다.
 - `@file` 선택기를 취소해도 메모 입력창 포커스는 유지됩니다.
+
+
+
+## 단축키 사용자 설정
+
+- Settings에서 `Memo2Terminal` 또는 `memo2terminal.shortcuts`를 검색하면 전송, 히스토리 이전/다음, 히스토리 목록 단축키를 각각 바꿀 수 있습니다.
+- 설정 화면은 `Cmd + ,`(Windows/Linux는 `Ctrl + ,`)로 열 수 있고, 명령 팔레트에서 `Preferences: Open Settings (UI)`를 실행해도 됩니다.
+- 설정을 비워두면 운영체제별 기본값을 사용합니다.
+- 설정을 저장하면 열린 `Memo to Terminal` 뷰의 실제 단축키, placeholder, 힌트 텍스트가 즉시 함께 바뀝니다.
+- 입력 형식 예: `Ctrl+Enter`, `Cmd+ArrowUp`, `Ctrl+ArrowDown`, `Cmd+Ctrl+H`
+
+설정 키는 아래 네 가지입니다.
+
+- `memo2terminal.shortcuts.send`: 메모 전송
+- `memo2terminal.shortcuts.historyPrevious`: 이전 히스토리
+- `memo2terminal.shortcuts.historyNext`: 다음 히스토리
+- `memo2terminal.shortcuts.historyList`: 히스토리 목록 열기
+
+예를 들어 아래처럼 설정할 수 있습니다.
+
+```json
+{
+  "memo2terminal.shortcuts.send": "Ctrl+Enter",
+  "memo2terminal.shortcuts.historyPrevious": "Ctrl+ArrowUp",
+  "memo2terminal.shortcuts.historyNext": "Cmd+ArrowDown",
+  "memo2terminal.shortcuts.historyList": "Cmd+Ctrl+H"
+}
+```
+
+지원하는 키 입력 예시는 아래와 같습니다.
+
+- 수정 키: `Cmd`, `Command`, `Meta`, `Ctrl`, `Control`, `Alt`, `Option`, `Shift`
+- 일반 키: `Enter`, `ArrowUp`, `ArrowDown`, `Up`, `Down`, `↑`, `↓`, `Tab`, `Esc`, `Escape`, `Backspace`, `Space`, 알파벳 한 글자, 숫자 한 글자
+- 잘못된 형식이 들어오면 해당 항목만 자동으로 기본값으로 돌아갑니다.

@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/theFrostBurn/memo2terminal.git"
   },
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "local",
   "engines": {
     "vscode": "^1.90.0"
@@ -38,7 +38,36 @@
         "command": "memo2terminal.focusView",
         "title": "Memo2Terminal: 메모장 뷰 포커스"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Memo2Terminal",
+      "properties": {
+        "memo2terminal.shortcuts.send": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "메모 전송 단축키입니다. 비워두면 운영체제별 기본값을 사용합니다. 예: Ctrl+Enter, Cmd+Enter"
+        },
+        "memo2terminal.shortcuts.historyPrevious": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "이전 히스토리로 이동하는 단축키입니다. 비워두면 운영체제별 기본값을 사용합니다. 예: Ctrl+ArrowUp, Cmd+ArrowUp"
+        },
+        "memo2terminal.shortcuts.historyNext": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "다음 히스토리로 이동하는 단축키입니다. 비워두면 운영체제별 기본값을 사용합니다. 예: Ctrl+ArrowDown, Cmd+ArrowDown"
+        },
+        "memo2terminal.shortcuts.historyList": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "히스토리 목록을 여는 단축키입니다. 비워두면 운영체제별 기본값을 사용합니다. 예: Ctrl+H, Cmd+Ctrl+H"
+        }
+      }
+    }
   },
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\"",

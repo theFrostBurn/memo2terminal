@@ -1,17 +1,21 @@
 (function () {
 	const vscode = acquireVsCodeApi();
+	const historyCycleHint = document.getElementById('historyCycleHint');
+	const historyListHint = document.getElementById('historyListHint');
 	const memo = document.getElementById('memo');
 	const sendButton = document.getElementById('sendButton');
-	const platform = document.body.dataset.platform;
 	const viewId = document.body.dataset.viewId;
+	const initialShortcutConfig = globalThis.__memo2terminalShortcutConfig;
 	const LEGACY_HISTORY_KEY = 'memo2terminal.history.v1';
 
 	if (
+		!(historyCycleHint instanceof HTMLElement) ||
+		!(historyListHint instanceof HTMLElement) ||
 		!(memo instanceof HTMLTextAreaElement) ||
 		!(sendButton instanceof HTMLButtonElement) ||
 		typeof viewId !== 'string' ||
 		viewId.length === 0 ||
-		(platform !== 'macos' && platform !== 'default')
+		!isShortcutConfigPayload(initialShortcutConfig)
 	) {
 		return;
 	}
@@ -25,6 +29,7 @@
 	let historyCursor = 0;
 	let draftValue = '';
 	let pendingFileTagRange = null;
+	let shortcutConfig = initialShortcutConfig;
 
 	sendButton.addEventListener('click', sendToExtension);
 	memo.addEventListener('focus', notifyFocusChanged);
@@ -58,21 +63,21 @@
 			return;
 		}
 
-		if (isHistoryShortcut(event, 'previous')) {
+		if (matchesShortcut(event, shortcutConfig.historyPrevious)) {
 			event.preventDefault();
 			event.stopPropagation();
 			moveHistory(-1);
 			return;
 		}
 
-		if (isHistoryShortcut(event, 'next')) {
+		if (matchesShortcut(event, shortcutConfig.historyNext)) {
 			event.preventDefault();
 			event.stopPropagation();
 			moveHistory(1);
 			return;
 		}
 
-		if (isHistoryListShortcut(event)) {
+		if (matchesShortcut(event, shortcutConfig.historyList)) {
 			event.preventDefault();
 			event.stopPropagation();
 			vscode.postMessage({
@@ -82,7 +87,7 @@
 			return;
 		}
 
-		if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+		if (matchesShortcut(event, shortcutConfig.send)) {
 			event.preventDefault();
 			event.stopPropagation();
 			sendToExtension();
@@ -105,12 +110,19 @@
 			return;
 		}
 
+		if (isShortcutConfigMessage(message)) {
+			applyShortcutConfig(message.shortcutConfig);
+			return;
+		}
+
 		if (!isStateMessage(message)) {
 			return;
 		}
 
 		applyState(message.state, message.focus === true, message.sourceViewId);
 	});
+
+	applyShortcutConfig(shortcutConfig);
 
 	vscode.postMessage({
 		type: 'ready',
@@ -322,6 +334,13 @@
 		pendingFileTagRange = null;
 	}
 
+	function applyShortcutConfig(nextShortcutConfig) {
+		shortcutConfig = nextShortcutConfig;
+		memo.placeholder = shortcutConfig.sendPlaceholder;
+		historyCycleHint.textContent = shortcutConfig.historyCycleHint;
+		historyListHint.textContent = shortcutConfig.historyListHint;
+	}
+
 	function clampSelection(text, selectionStart, selectionEnd) {
 		const maxIndex = text.length;
 		const start = clampNumber(selectionStart, 0, maxIndex);
@@ -345,29 +364,51 @@
 		return Boolean(message && message.type === 'fileTagPicked' && (message.text === null || typeof message.text === 'string'));
 	}
 
-	function isHistoryShortcut(event, direction) {
-		const arrowKey = direction === 'previous' ? 'ArrowUp' : 'ArrowDown';
-		if (event.key !== arrowKey) {
+	function matchesShortcut(event, binding) {
+		if (binding.key !== undefined && event.key !== binding.key) {
 			return false;
 		}
 
-		if (platform === 'macos') {
-			return event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+		if (binding.code !== undefined && event.code !== binding.code) {
+			return false;
 		}
 
-		return event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+		return (
+			event.altKey === binding.alt &&
+			event.ctrlKey === binding.ctrl &&
+			event.metaKey === binding.meta &&
+			event.shiftKey === binding.shift
+		);
 	}
 
-	function isHistoryListShortcut(event) {
-		if (event.code !== 'KeyH') {
-			return false;
-		}
+	function isShortcutConfigMessage(message) {
+		return Boolean(message && message.type === 'shortcutConfigChanged' && isShortcutConfigPayload(message.shortcutConfig));
+	}
 
-		if (platform === 'macos') {
-			return event.metaKey && event.ctrlKey && !event.shiftKey && !event.altKey;
-		}
+	function isShortcutConfigPayload(config) {
+		return Boolean(
+			config &&
+			isShortcutBinding(config.send) &&
+			isShortcutBinding(config.historyPrevious) &&
+			isShortcutBinding(config.historyNext) &&
+			isShortcutBinding(config.historyList) &&
+			typeof config.sendPlaceholder === 'string' &&
+			typeof config.historyCycleHint === 'string' &&
+			typeof config.historyListHint === 'string'
+		);
+	}
 
-		return event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+	function isShortcutBinding(binding) {
+		return Boolean(
+			binding &&
+			typeof binding.alt === 'boolean' &&
+			typeof binding.ctrl === 'boolean' &&
+			typeof binding.meta === 'boolean' &&
+			typeof binding.shift === 'boolean' &&
+			typeof binding.display === 'string' &&
+			(binding.key === undefined || typeof binding.key === 'string') &&
+			(binding.code === undefined || typeof binding.code === 'string')
+		);
 	}
 
 	function isStateMessage(message) {
