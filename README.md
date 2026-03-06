@@ -8,13 +8,13 @@ VS Code 또는 Cursor의 Explorer와 Source Control 영역에 메모 공간(`tex
 ## 기능
 
 - Explorer와 Source Control 영역에 `Memo to Terminal` 뷰 표시
-- 메모 입력 후 `Ctrl+Enter`(macOS는 `Cmd+Enter`) 또는 버튼 클릭으로 터미널로 전송
+- 메모 입력 후 `Ctrl + Enter`(macOS는 `Cmd + Enter`) 또는 버튼 클릭으로 터미널로 전송
 - 전송 후 입력창 자동 비움 + 포커스 유지
 - 활성 터미널이 없으면 `Memo2Terminal` 터미널 생성 후 전송
 - 최근 전송 텍스트 히스토리 최대 15개 공용 보관(`workspaceState`)
 - 두 뷰 사이에서 메모 초안, 히스토리, 커서 선택 범위 즉시 동기화
-- `Cmd+↑/↓` 히스토리 순환
-- `Cmd+Ctrl+H` 히스토리 목록(Quick Pick) 열기
+- macOS: `Cmd + ↑/↓` 히스토리 순환, `Cmd + Ctrl + H` 히스토리 목록(Quick Pick)
+- Windows/Linux: `Ctrl + ↑/↓` 히스토리 순환, `Ctrl + H` 히스토리 목록(Quick Pick)
 - `@` 입력 시 Quick Pick이 열리고 파일을 선택할 수 있으며, 선택한 파일은 `@경로` 형태로 메모에 삽입됩니다.
 
 

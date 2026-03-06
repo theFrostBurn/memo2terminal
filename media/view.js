@@ -2,10 +2,17 @@
 	const vscode = acquireVsCodeApi();
 	const memo = document.getElementById('memo');
 	const sendButton = document.getElementById('sendButton');
+	const platform = document.body.dataset.platform;
 	const viewId = document.body.dataset.viewId;
 	const LEGACY_HISTORY_KEY = 'memo2terminal.history.v1';
 
-	if (!(memo instanceof HTMLTextAreaElement) || !(sendButton instanceof HTMLButtonElement) || typeof viewId !== 'string' || viewId.length === 0) {
+	if (
+		!(memo instanceof HTMLTextAreaElement) ||
+		!(sendButton instanceof HTMLButtonElement) ||
+		typeof viewId !== 'string' ||
+		viewId.length === 0 ||
+		(platform !== 'macos' && platform !== 'default')
+	) {
 		return;
 	}
 
@@ -51,21 +58,21 @@
 			return;
 		}
 
-		if (event.key === 'ArrowUp' && event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+		if (isHistoryShortcut(event, 'previous')) {
 			event.preventDefault();
 			event.stopPropagation();
 			moveHistory(-1);
 			return;
 		}
 
-		if (event.key === 'ArrowDown' && event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+		if (isHistoryShortcut(event, 'next')) {
 			event.preventDefault();
 			event.stopPropagation();
 			moveHistory(1);
 			return;
 		}
 
-		if (event.code === 'KeyH' && event.metaKey && event.ctrlKey && !event.shiftKey && !event.altKey) {
+		if (isHistoryListShortcut(event)) {
 			event.preventDefault();
 			event.stopPropagation();
 			vscode.postMessage({
@@ -336,6 +343,31 @@
 
 	function isFileTagMessage(message) {
 		return Boolean(message && message.type === 'fileTagPicked' && (message.text === null || typeof message.text === 'string'));
+	}
+
+	function isHistoryShortcut(event, direction) {
+		const arrowKey = direction === 'previous' ? 'ArrowUp' : 'ArrowDown';
+		if (event.key !== arrowKey) {
+			return false;
+		}
+
+		if (platform === 'macos') {
+			return event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+		}
+
+		return event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+	}
+
+	function isHistoryListShortcut(event) {
+		if (event.code !== 'KeyH') {
+			return false;
+		}
+
+		if (platform === 'macos') {
+			return event.metaKey && event.ctrlKey && !event.shiftKey && !event.altKey;
+		}
+
+		return event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
 	}
 
 	function isStateMessage(message) {

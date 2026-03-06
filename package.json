@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/theFrostBurn/memo2terminal.git"
   },
-  "version": "0.0.2",
+  "version": "0.0.4",
   "publisher": "local",
   "engines": {
     "vscode": "^1.90.0"

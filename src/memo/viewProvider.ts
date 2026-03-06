@@ -20,6 +20,15 @@ interface FileTagPickItem extends vscode.QuickPickItem {
 	sortRank: number;
 }
 
+type ShortcutPlatform = 'macos' | 'default';
+
+interface ShortcutConfig {
+	historyCycleHint: string;
+	historyListHint: string;
+	platform: ShortcutPlatform;
+	sendPlaceholder: string;
+}
+
 const FILE_TAG_EXCLUDED_DIRECTORIES = [
 	'.git',
 	'.venv',
@@ -277,6 +286,7 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 		const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'view.css'));
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'view.js'));
 		const nonce = getNonce();
+		const shortcutConfig = getShortcutConfig();
 
 	return `<!DOCTYPE html>
 <html lang="ko">
@@ -287,12 +297,12 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 	<link rel="stylesheet" href="${styleUri}" />
 	<title>Memo2Terminal</title>
 </head>
-<body data-view-id="${this.viewId}">
+<body data-platform="${shortcutConfig.platform}" data-view-id="${this.viewId}">
 	<div class="container">
 		<div class="panel">
-				<textarea id="memo" placeholder="Ctrl+Enter 또는 Cmd+Enter 로 전송"></textarea>
+				<textarea id="memo" placeholder="${shortcutConfig.sendPlaceholder}"></textarea>
 			<div class="actions">
-				<p class="hint">Cmd+↑/↓: 히스토리 순환<br />Cmd+Ctrl+H: 히스토리 목록</p>
+				<p class="hint">${shortcutConfig.historyCycleHint}<br />${shortcutConfig.historyListHint}</p>
 				<button id="sendButton" type="button" aria-label="터미널로 전송">
 					<span class="sendIcon" aria-hidden="true"></span>
 				</button>
@@ -324,6 +334,24 @@ function formatHistoryLabel(text: string): string {
 function formatHistoryDescription(text: string): string {
 	const normalized = text.replace(/\s+/g, ' ').trim();
 	return normalized.length <= 90 ? normalized : `${normalized.slice(0, 87)}...`;
+}
+
+function getShortcutConfig(): ShortcutConfig {
+	if (process.platform === 'darwin') {
+		return {
+			historyCycleHint: 'Cmd + ↑/↓ : 히스토리 순환',
+			historyListHint: 'Cmd + Ctrl + H : 히스토리 목록',
+			platform: 'macos',
+			sendPlaceholder: 'Cmd + Enter 로 터미널에 전송',
+		};
+	}
+
+	return {
+		historyCycleHint: 'Ctrl + ↑/↓ : 히스토리 순환',
+		historyListHint: 'Ctrl + H : 히스토리 목록',
+		platform: 'default',
+		sendPlaceholder: 'Ctrl + Enter 로 터미널에 전송',
+	};
 }
 
 export { Memo2TerminalViewProvider, MemoViewRegistry };
