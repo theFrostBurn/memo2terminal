@@ -1,13 +1,13 @@
 {
   "name": "memo2terminal",
   "displayName": "Memo2Terminal",
-  "description": "Explorer와 Source Control에서 공유 메모를 터미널로 전송하는 Memo2Terminal 미니멀 MVP",
+  "description": "Explorer와 Source Control 영역의 메모를 터미널로 전송하는 VS Code 확장",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/theFrostBurn/memo2terminal.git"
   },
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "local",
   "engines": {
     "vscode": "^1.90.0"

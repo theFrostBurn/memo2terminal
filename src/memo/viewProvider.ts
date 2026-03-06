@@ -290,7 +290,7 @@ class Memo2TerminalViewProvider implements vscode.WebviewViewProvider {
 <body data-view-id="${this.viewId}">
 	<div class="container">
 		<div class="panel">
-			<textarea id="memo" placeholder="메모 입력 후 Ctrl+Enter 또는 전송 버튼"></textarea>
+				<textarea id="memo" placeholder="Ctrl+Enter 또는 Cmd+Enter 로 전송"></textarea>
 			<div class="actions">
 				<p class="hint">Cmd+↑/↓: 히스토리 순환<br />Cmd+Ctrl+H: 히스토리 목록</p>
 				<button id="sendButton" type="button" aria-label="터미널로 전송">
